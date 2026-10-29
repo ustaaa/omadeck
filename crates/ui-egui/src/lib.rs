@@ -6,16 +6,19 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+mod appearance;
 pub mod backstage;
 pub mod canvas;
 pub mod capture;
 pub mod control;
+mod desktop_theme;
 pub mod dialogs;
 pub mod doc_window;
 pub mod eyedropper;
 pub mod icons;
 pub mod media;
 pub mod menus;
+pub mod omarchy;
 pub mod opening;
 pub mod ribbon;
 pub mod settings;
@@ -105,6 +108,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("review.thesaurusPane", "Thesaurus", Some("Shift+F7"), "{word?}: open the Thesaurus pane on the selected word"),
     ("view.tab", "Ribbon Tab", None, "{tab}"),
     ("view.collapseRibbon", "Collapse the Ribbon", Some("Cmd+F1"), "{}"),
+    ("view.systemTheme", "Follow Desktop Appearance", None, "{on?: bool}"),
     ("view.dark", "Dark Mode", None, "{on?: bool}"),
     ("view.grayscale", "Grayscale", None, "{on?: bool}"),
     ("view.newWindow", "New Window", None, "{on?: bool, slide?: index, delta?: int}"),
@@ -121,7 +125,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
         Some("Cmd+P"),
         "{layout?, perPage?, slides?, includeHidden?, frame?, paper?: letter|a4|legal|a3, orientation?: portrait|landscape}",
     ),
-    ("app.about", "About DeckCraft", None, "{}"),
+    ("app.about", "About OmaDeck", None, "{}"),
     ("app.checkUpdates", "Check for Updates…", None, "{}"),
     ("app.palette", "Command Palette", Some("Cmd+Shift+P"), "{}"),
     ("app.preferences", "Preferences…", Some("Cmd+,"), "{}"),
@@ -280,6 +284,8 @@ pub struct SlideApp {
     pending_urls: Vec<String>,
     #[cfg(not(target_arch = "wasm32"))]
     updates_rt: updates_ui::Runtime,
+    appearance: omarchy::Watcher,
+    desktop_theme: desktop_theme::DesktopTheme,
     /// Text for the system clipboard from a Copy or Cut command, handed over on the next frame.
     pending_copy: Option<String>,
     /// Bounded screenshot completion slots for the control channel (egui 0.37 callbacks).
@@ -468,3 +474,6 @@ mod inbox_tests;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod appearance_input_tests;

@@ -48,7 +48,12 @@ pub fn choose(display: Option<&str>, wayland: Option<&str>, force_wayland: bool,
 pub fn choose_from_env() -> Choice {
     let display = std::env::var("DISPLAY").ok();
     let wayland = std::env::var("WAYLAND_DISPLAY").ok();
-    choose(display.as_deref(), wayland.as_deref(), std::env::var_os("DECKCRAFT_WAYLAND").is_some(), |p| p.exists())
+    choose(
+        display.as_deref(),
+        wayland.as_deref(),
+        std::env::var_os("OMADECK_WAYLAND").is_some() || std::env::var_os("DECKCRAFT_WAYLAND").is_some(),
+        |p| p.exists(),
+    )
 }
 
 #[cfg(test)]

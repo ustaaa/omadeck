@@ -124,12 +124,14 @@ impl Tokens {
         }
     }
     pub fn get(ctx: &egui::Context) -> Self {
-        if ctx.global_style().visuals.dark_mode { Self::dark() } else { Self::light() }
+        let base = if ctx.global_style().visuals.dark_mode { Self::dark() } else { Self::light() };
+        crate::appearance::tokens(ctx, base)
     }
 }
 
 /// Apply tokens to egui's style.
 pub fn apply(ctx: &egui::Context, t: &Tokens) {
+    let t = &crate::appearance::tokens(ctx, *t);
     let mut v = if t.dark { Visuals::dark() } else { Visuals::light() };
     v.panel_fill = t.chrome;
     v.window_fill = t.card;
@@ -163,10 +165,10 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
         s.spacing.item_spacing = egui::vec2(6.0, 4.0);
         s.spacing.button_padding = egui::vec2(6.0, 3.0);
         s.spacing.interact_size.y = 22.0;
-        s.text_styles.insert(egui::TextStyle::Body, egui::FontId::proportional(13.0));
-        s.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(13.0));
-        s.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(11.0));
-        s.text_styles.insert(egui::TextStyle::Heading, egui::FontId::proportional(18.0));
+        s.text_styles.insert(egui::TextStyle::Body, font(13.0));
+        s.text_styles.insert(egui::TextStyle::Button, font(13.0));
+        s.text_styles.insert(egui::TextStyle::Small, font(11.0));
+        s.text_styles.insert(egui::TextStyle::Heading, font(18.0));
     });
 }
 
@@ -179,7 +181,9 @@ pub fn install_fonts(ctx: &egui::Context) {
 /// installed or embedded faces that draw text the interface faces lack (Hangul, Simplified
 /// Chinese, Devanagari…, #101). See [`crate::uifonts`].
 pub fn install_fonts_with(ctx: &egui::Context, extra: &[std::sync::Arc<deckcraft_fonts::FontFace>]) {
-    ctx.set_fonts(font_definitions(extra));
+    let mut defs = font_definitions(extra);
+    crate::appearance::fonts(ctx, &mut defs);
+    ctx.set_fonts(defs);
 }
 
 /// The interface font definitions; see [`install_fonts_with`].
@@ -224,6 +228,7 @@ pub fn font_definitions(extra: &[std::sync::Arc<deckcraft_fonts::FontFace>]) -> 
         }
     }
     add_fallback_faces(&mut defs, extra);
+    defs.families.insert(FontFamily::Name("omadeck-ui".into()), defs.families.get(&FontFamily::Proportional).cloned().unwrap_or_default());
     // The Japanese interface face (the first one when Inter isn't embedded) hints its en and em
     // dashes, bars thinner than a pixel, down to nothing, so they drew as gaps in interface text;
     // unhinted, they draw.
@@ -234,6 +239,8 @@ pub fn font_definitions(extra: &[std::sync::Arc<deckcraft_fonts::FontFace>]) -> 
             *d = std::sync::Arc::new(data);
         }
     }
+    defs.families
+        .insert(FontFamily::Name("omadeck-document-bold".into()), defs.families.get(&FontFamily::Name("bold".into())).cloned().unwrap_or_default());
     defs
 }
 
@@ -257,8 +264,12 @@ pub fn bold(size: f32) -> egui::FontId {
     egui::FontId::new(size, FontFamily::Name("bold".into()))
 }
 
+pub fn document_bold(size: f32) -> egui::FontId {
+    egui::FontId::new(size, FontFamily::Name("omadeck-document-bold".into()))
+}
+
 pub fn font(size: f32) -> egui::FontId {
-    egui::FontId::proportional(size)
+    egui::FontId::new(size, FontFamily::Name("omadeck-ui".into()))
 }
 
 pub fn to_color32(c: deckcraft_color::Rgba) -> Color32 {
@@ -447,7 +458,7 @@ mod tests {
         );
         assert_eq!(text, "deck שלום 42");
         ctx.fonts_mut(|fonts| {
-            let galley = fonts.layout_no_wrap(text.clone(), egui::FontId::proportional(13.0), egui::Color32::WHITE);
+            let galley = fonts.layout_no_wrap(text.clone(), font(13.0), egui::Color32::WHITE);
             let row = &galley.rows[0];
             let x = |c| row.glyphs.iter().find(|g| g.chr == c).unwrap().pos.x;
             assert!(x('ש') > x('ל') && x('ל') > x('ו') && x('ו') > x('ם'), "Hebrew paints in visual RTL order");

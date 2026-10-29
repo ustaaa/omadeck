@@ -20,15 +20,15 @@ pub fn about(_app: &mut SlideApp, ui: &mut Ui) {
     ui.vertical_centered(|ui| {
         let (r, _) = ui.allocate_exact_size(vec2(64.0, 64.0), Sense::hover());
         paint_logo(ui.painter(), r);
-        ui.label(egui::RichText::new("DeckCraft").font(theme::bold(22.0)));
+        ui.label(egui::RichText::new("OmaDeck").font(theme::bold(22.0)));
         ui.label(egui::RichText::new(version_line()).color(t.text_dim));
         ui.add_space(6.0);
-        ui.label("Presentations and slide shows, rebuilt from scratch in pure Rust.");
+        ui.label("OmaDeck development • based on DeckCraft v0.12.0 (29f0f777)");
         ui.label("An open-source, clean-room project. Not affiliated with Microsoft.");
         ui.add_space(6.0);
-        ui.hyperlink_to("Join our community on Discord", deckcraft_engine::links::DISCORD);
-        ui.hyperlink_to("getartcraft.com/apps/deckcraft", deckcraft_engine::links::APP_PAGE);
-        ui.hyperlink_to("Source on GitHub", deckcraft_engine::links::GITHUB);
+        ui.hyperlink_to("OmaDeck source", "https://github.com/ustaaa/omadeck");
+
+        ui.hyperlink_to("Upstream DeckCraft source", deckcraft_engine::links::GITHUB);
         ui.add_space(6.0);
         ui.label(egui::RichText::new("MIT OR Apache-2.0 · © 2026 ArtCraft Team and the DeckCraft contributors").size(11.0).color(t.text_faint));
     });
@@ -49,20 +49,25 @@ pub fn version_line() -> String {
     s
 }
 
-/// DeckCraft's mark, drawn in code: a slide card with a play triangle in our orange.
+/// Original OmaDeck screen mark, matching the generated launcher icon.
 pub fn paint_logo(p: &egui::Painter, r: Rect) {
-    let orange = Color32::from_rgb(0xF2, 0x6B, 0x1D);
-    let deep = Color32::from_rgb(0xC2, 0x4E, 0x14);
-    let card = r.shrink(r.width() * 0.08);
-    p.rect_filled(card.translate(vec2(r.width() * 0.04, r.width() * 0.05)), CornerRadius::same((r.width() * 0.14) as u8), deep);
-    p.rect_filled(card, CornerRadius::same((r.width() * 0.14) as u8), orange);
-    let c = card.center();
-    let s = card.width() * 0.22;
-    p.add(egui::Shape::convex_polygon(
-        vec![pos2(c.x - s * 0.7, c.y - s), pos2(c.x + s, c.y), pos2(c.x - s * 0.7, c.y + s)],
-        Color32::WHITE,
-        Stroke::NONE,
-    ));
+    let point = |x: f32, y: f32| pos2(r.left() + x * r.width() / 256.0, r.top() + y * r.height() / 256.0);
+    p.rect_filled(r.shrink(r.width() * 0.047), CornerRadius::same((r.width() * 0.11) as u8), Color32::from_rgb(25, 31, 41));
+    let paper = Color32::from_rgb(235, 242, 240);
+    p.rect_stroke(
+        Rect::from_min_max(point(49.0, 59.0), point(207.0, 177.0)),
+        CornerRadius::ZERO,
+        Stroke::new(r.width() * 0.039, paper),
+        egui::StrokeKind::Inside,
+    );
+    for (x, y, w, h, color) in [
+        (72.0, 88.0, 112.0, 12.0, Color32::from_rgb(238, 164, 98)),
+        (72.0, 119.0, 90.0, 10.0, paper),
+        (122.0, 177.0, 12.0, 20.0, paper),
+        (93.0, 197.0, 70.0, 10.0, paper),
+    ] {
+        p.rect_filled(Rect::from_min_max(point(x, y), point(x + w, y + h)), CornerRadius::ZERO, color);
+    }
 }
 
 #[cfg(test)]

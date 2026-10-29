@@ -84,9 +84,9 @@ pub(super) fn print(app: &mut SlideApp, ui: &mut Ui, bs: &mut Backstage) {
             dim(
                 ui,
                 if app.services.pick_save.is_some() {
-                    "DeckCraft prints through a PDF: it opens in your PDF viewer, where you choose the printer."
+                    "OmaDeck prints through a PDF: it opens in your PDF viewer, where you choose the printer."
                 } else {
-                    "DeckCraft prints through a PDF: it downloads, ready to print from your browser or PDF viewer."
+                    "OmaDeck prints through a PDF: it downloads, ready to print from your browser or PDF viewer."
                 },
             );
             ui.add_space(14.0);
@@ -229,7 +229,7 @@ fn preview(app: &mut SlideApp, ui: &mut Ui, bs: &mut Backstage, doc: &deckcraft_
                 let r = Rect::from_min_size(pos2(page.center().x - w / 2.0, page.top() + page.height() * 0.08), vec2(w, w * aspect));
                 draw_slide(ui, *i, r);
                 let notes = doc.slides.get(*i).map(|s| s.notes_text()).unwrap_or_default();
-                let font = theme::font((11.0 * scale).clamp(5.0, 13.0));
+                let font = egui::FontId::proportional((11.0 * scale).clamp(5.0, 13.0));
                 let text_rect = Rect::from_min_max(
                     pos2(page.left() + page.width() * 0.12, r.bottom() + 20.0 * scale),
                     page.max - vec2(page.width() * 0.12, 30.0 * scale),

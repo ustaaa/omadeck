@@ -4,6 +4,22 @@ impl SlideApp {
     /// Style, fonts and zoom setup. Runs in a real UI pass, not from `run_logic`, because
     /// `set_fonts`/`set_visuals` only take effect for the pass that lays out the UI.
     pub(super) fn ui_setup(&mut self, ctx: &egui::Context) -> bool {
+        let snapshot = self.appearance.current(ctx);
+        let desktop = self.desktop_theme.take_change(ctx, self.ui.follow_desktop).or(self.desktop_theme.current());
+        let palette = snapshot.palette.filter(|_| self.ui.follow_desktop);
+        if self.ui.follow_desktop
+            && let Some(dark) = palette.map(|p| p.dark).or(desktop)
+        {
+            let brightness = if dark { theme::Brightness::Dark } else { theme::Brightness::Light };
+            self.restyle |= self.ui.brightness != brightness;
+            self.ui.brightness = brightness;
+        }
+        let (style_changed, fonts_changed) =
+            crate::appearance::refresh(ctx, palette, snapshot.fonts.filter(|_| self.ui.follow_desktop), self.chrome_font_reload_is_idle(ctx));
+        self.restyle |= style_changed;
+        if fonts_changed {
+            self.styled = false;
+        }
         let scale = self.ui.ui_scale.clamp(0.5, 3.0);
         if (ctx.zoom_factor() - scale).abs() > 1e-3 {
             ctx.set_zoom_factor(scale);
@@ -23,6 +39,23 @@ impl SlideApp {
         }
         self.fonts_ready = true;
         true
+    }
+
+    /// A font install discards one paint pass. Defer it while any real or synthetic input owns that pass.
+    fn chrome_font_reload_is_idle(&self, ctx: &egui::Context) -> bool {
+        self.fonts_ready
+            && self.styled
+            && self.synthetic.is_empty()
+            && self.synthetic_next.is_empty()
+            && !self.synthetic_pending
+            && self.synthetic_injected_at.is_none()
+            && self.dialog.is_none()
+            && self.palette.is_none()
+            && self.ime_composition.is_none()
+            && self.ime_terminal_pending.is_none()
+            && !self.session.active().is_some_and(|d| d.selection.text.is_some())
+            && !ctx.text_edit_focused()
+            && ctx.input(|i| i.events.is_empty() && !i.pointer.any_down() && i.keys_down.is_empty())
     }
 
     /// AutoRecover on a monotonic deadline, even when nothing is painted.

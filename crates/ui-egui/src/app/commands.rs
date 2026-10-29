@@ -149,7 +149,12 @@ impl SlideApp {
                 self.ui.ribbon_collapsed = false;
             }
             "view.collapseRibbon" => self.ui.ribbon_collapsed = !self.ui.ribbon_collapsed,
+            "view.systemTheme" => {
+                self.ui.follow_desktop = self.flag(p, self.ui.follow_desktop);
+                self.restyle = true;
+            }
             "view.dark" => {
+                self.ui.follow_desktop = false;
                 let on = self.flag(p, self.ui.brightness == theme::Brightness::Dark);
                 self.ui.brightness = if on { theme::Brightness::Dark } else { theme::Brightness::Light };
                 self.restyle = true;
