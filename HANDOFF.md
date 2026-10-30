@@ -50,3 +50,10 @@ Theme root priority/recovery and exact `OMADECK_X11=1` handling now have focused
 Legacy Deck recovery migration skips entries with a held owner lock in the old folder;
 engine and app tests cover real lock files and migration. Cargo could not start tests
 because the shared Cargo git DB is unwritable from this workspace; formatting passed.
+
+### Upstream variable isolation by Claude (2026-10-31; branch claude/identity-env)
+Preferences, recovery and the control port now read only `OMADECK_NO_PREFS`,
+`OMADECK_NO_RECOVERY` and `OMADECK_CONTROL_PORT`. The `DECKCRAFT_` fallbacks are gone,
+so values exported for an upstream DeckCraft install cannot switch off OmaDeck
+preferences or recovery or bind the same control port. `DECKCRAFT_WAYLAND` stays as the
+documented backend alias. A unit test proves upstream names are ignored.

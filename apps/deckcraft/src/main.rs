@@ -4,7 +4,7 @@
 //! A PowerPoint Show (`.ppsx`) given last starts its slide show, as a double-click does in PowerPoint.
 //! `deckcraft --help` prints the flags and exits. `deckcraft --version` prints the version and exits.
 //!
-//! `--control <port>` (or `DECKCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
+//! `--control <port>` (or `OMADECK_CONTROL_PORT`) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
 //! See `deckcraft_ui_egui::control` for the methods.
 //!
@@ -230,8 +230,30 @@ fn copy_without_overwrite(source: &std::path::Path, destination: &std::path::Pat
     Ok(())
 }
 
+/// Only OmaDeck's own names are read for preferences, recovery and the control port. A
+/// `DECKCRAFT_` value exported for an upstream DeckCraft install must not change OmaDeck.
+fn prefs_enabled() -> bool {
+    prefs_enabled_from(|name| std::env::var_os(name))
+}
+
+fn prefs_enabled_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    var(NO_PREFS).is_none()
+}
+
+fn recovery_enabled_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    var(NO_RECOVERY).is_none()
+}
+
+fn control_port_from(var: impl Fn(&str) -> Option<String>) -> Option<u16> {
+    var(CONTROL_PORT).and_then(|p| p.parse().ok())
+}
+
+const NO_PREFS: &str = "OMADECK_NO_PREFS";
+const NO_RECOVERY: &str = "OMADECK_NO_RECOVERY";
+const CONTROL_PORT: &str = "OMADECK_CONTROL_PORT";
+
 fn load_prefs(app: &mut SlideApp) {
-    if std::env::var_os("OMADECK_NO_PREFS").is_some() || std::env::var_os("DECKCRAFT_NO_PREFS").is_some() {
+    if !prefs_enabled() {
         return;
     }
     let Some(dir) = config_dir() else { return };
@@ -245,7 +267,7 @@ fn load_prefs(app: &mut SlideApp) {
 }
 
 fn save_prefs(app: &SlideApp) {
-    if std::env::var_os("OMADECK_NO_PREFS").is_some() || std::env::var_os("DECKCRAFT_NO_PREFS").is_some() {
+    if !prefs_enabled() {
         return;
     }
     if let Some(dir) = config_dir() {
@@ -344,10 +366,7 @@ fn main() -> eframe::Result {
     // First, so every start-up record (and the engine's panic hook, installed with the first
     // Session) is captured; see `logging`.
     let logger = logging::install();
-    let (control_port, files, sample, show) = match startup(
-        std::env::var("OMADECK_CONTROL_PORT").or_else(|_| std::env::var("DECKCRAFT_CONTROL_PORT")).ok().and_then(|p| p.parse().ok()),
-        std::env::args().skip(1),
-    ) {
+    let (control_port, files, sample, show) = match startup(control_port_from(|name| std::env::var(name).ok()), std::env::args().skip(1)) {
         Startup::Help => {
             print!("{USAGE}");
             return Ok(());
@@ -425,7 +444,7 @@ fn main() -> eframe::Result {
             load_prefs(&mut app);
             app.enable_desktop_appearance();
             // AutoRecover: reopen what a previous run left unsaved, then keep it current.
-            if std::env::var_os("OMADECK_NO_RECOVERY").is_none() && std::env::var_os("DECKCRAFT_NO_RECOVERY").is_none() {
+            if recovery_enabled_from(|name| std::env::var_os(name)) {
                 app.session.recovery_dir = deckcraft_engine::recovery::default_dir();
                 if let (Some(current), Some(config)) = (&app.session.recovery_dir, config_dir()) {
                     preserve_legacy_recovery(&config.join("recovery"), current);
@@ -463,6 +482,18 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn upstream_names_do_not_reach_preferences_recovery_or_the_control_port() {
+        let upstream = |name: &str| name.starts_with("DECKCRAFT_").then(|| "7979".to_string());
+        assert!(prefs_enabled_from(|name| upstream(name).map(Into::into)));
+        assert!(recovery_enabled_from(|name| upstream(name).map(Into::into)));
+        assert_eq!(control_port_from(upstream), None);
+        let ours = |name: &str| name.starts_with("OMADECK_").then(|| "7980".to_string());
+        assert!(!prefs_enabled_from(|name| ours(name).map(Into::into)));
+        assert!(!recovery_enabled_from(|name| ours(name).map(Into::into)));
+        assert_eq!(control_port_from(ours), Some(7980));
+    }
 
     #[test]
     fn only_one_enables_x11_override() {
@@ -542,7 +573,7 @@ mod tests {
         let out = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "tests::on_exit_ends_the_process_on_macos", "--nocapture"])
             .env("DECKCRAFT_TEST_ON_EXIT", "1")
-            .env("DECKCRAFT_NO_PREFS", "1")
+            .env(NO_PREFS, "1")
             .output()
             .unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
