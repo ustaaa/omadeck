@@ -132,3 +132,19 @@ fn options_close_button_restores_the_settings() {
     assert_eq!(h.state().session.prefs.smart_guides, was, "the close button restores the setting");
     assert!(h.state().dialog.is_none(), "and the dialog closes");
 }
+
+#[test]
+fn preferences_explain_ui_fonts_and_separate_app_multiplier_from_os_scale() {
+    let mut h = harness();
+    h.state_mut().ui.ui_scale = 1.25;
+    open_options(&mut h);
+
+    assert!(h
+        .query_by_label("Follow desktop appearance also follows desktop chrome fonts. Turn it off to use OmaDeck's built-in UI colors and fonts. Slide and document fonts are unchanged.")
+        .is_some());
+    let expected = match h.ctx.native_pixels_per_point().filter(|value| value.is_finite() && *value > 0.0) {
+        Some(os) => format!("Interface multiplier: 1.25× · OS display scale: {os:.2}×"),
+        None => "Interface multiplier: 1.25× · OS display scale: unavailable".to_string(),
+    };
+    assert!(h.query_by_label(&expected).is_some(), "the readout reports both scales: {expected}");
+}
