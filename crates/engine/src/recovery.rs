@@ -77,8 +77,8 @@ fn claim_dir(dir: &Path) {
     }
 }
 
-/// Whether another running instance holds `owner`'s lock in `dir`.
-fn owner_alive(dir: &Path, owner: u64) -> bool {
+/// Whether another running instance holds `owner`'s recovery lock in `dir`.
+pub fn owner_alive(dir: &Path, owner: u64) -> bool {
     let Ok(f) = File::open(lock_path(dir, owner)) else { return false };
     matches!(f.try_lock(), Err(std::fs::TryLockError::WouldBlock))
 }
@@ -257,6 +257,19 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("deckcraft-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn owner_alive_checks_a_real_held_file_lock() {
+        let dir = temp("recovery-owner-lock");
+        std::fs::create_dir_all(&dir).unwrap();
+        let owner = 123_456;
+        let lock = File::create(lock_path(&dir, owner)).unwrap();
+        lock.try_lock().unwrap();
+        assert!(owner_alive(&dir, owner));
+        drop(lock);
+        assert!(!owner_alive(&dir, owner));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

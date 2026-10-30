@@ -44,3 +44,9 @@ legacy config recovery entries are copied without overwriting, with uid collisio
 assigned a fresh recoverable id while the old files remain. Added a focused migration
 test. Formatting and diff checks pass; Rust test execution could not access the Cargo
 git checkout outside the writable workspace.
+
+### Candidate 2 review fixes (2026-10-31)
+Theme root priority/recovery and exact `OMADECK_X11=1` handling now have focused tests.
+Legacy Deck recovery migration skips entries with a held owner lock in the old folder;
+engine and app tests cover real lock files and migration. Cargo could not start tests
+because the shared Cargo git DB is unwritable from this workspace; formatting passed.

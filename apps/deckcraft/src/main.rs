@@ -99,6 +99,15 @@ fn preserve_legacy_recovery(legacy: &std::path::Path, current: &std::path::Path)
             else {
                 continue;
             };
+            let owner = metadata
+                .is_file()
+                .then(|| std::fs::read(&metadata))
+                .transpose()?
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                .and_then(|value| value.get("owner").and_then(serde_json::Value::as_u64));
+            if owner.is_some_and(|owner| deckcraft_engine::recovery::owner_alive(legacy, owner)) {
+                continue;
+            }
             let fingerprint = legacy_recovery_fingerprint(&document, &metadata)?;
             let marker = current.join(format!(".omadeck-migrated-{source_uid}-{fingerprint:016x}"));
             if marker.exists() {
@@ -326,6 +335,10 @@ fn app_icon() -> Option<egui::IconData> {
 
 /// Install logging, parse startup arguments and environment, launch the native app, and
 /// propagate an eframe startup failure.
+fn x11_override(value: Option<&std::ffi::OsStr>) -> bool {
+    value == Some(std::ffi::OsStr::new("1"))
+}
+
 fn main() -> eframe::Result {
     // First, so every start-up record (and the engine's panic hook, installed with the first
     // Session) is captured; see `logging`.
@@ -375,7 +388,7 @@ fn main() -> eframe::Result {
     #[cfg(all(unix, not(target_os = "macos")))]
     // Linux pilot policy: launchers opt into native Wayland for direct compositor scaling.
     // OMADECK_X11=1 explicitly forces X11; unset OMADECK_WAYLAND to use winit's default.
-    let x11 = std::env::var_os("OMADECK_X11").is_some()
+    let x11 = x11_override(std::env::var_os("OMADECK_X11").as_deref())
         || match display::choose_from_env() {
             display::Choice::X11 => true,
             display::Choice::Default => false,
@@ -451,6 +464,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn only_one_enables_x11_override() {
+        assert!(x11_override(Some(std::ffi::OsStr::new("1"))));
+        assert!(!x11_override(Some(std::ffi::OsStr::new("0"))));
+        assert!(!x11_override(Some(std::ffi::OsStr::new(""))));
+        assert!(!x11_override(None));
+    }
+
+    #[test]
     fn legacy_recovery_copy_preserves_source_and_never_overwrites() {
         let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
         let root = std::env::temp_dir().join(format!("omadeck-recovery-migration-{}-{unique}", std::process::id()));
@@ -461,10 +482,21 @@ mod tests {
         std::fs::create_dir_all(&current).unwrap();
         std::fs::write(legacy.join("101.deckcraft"), b"legacy recovery").unwrap();
         std::fs::write(legacy.join("202.deckcraft"), b"legacy collision payload").unwrap();
-        std::fs::write(legacy.join("202.json"), br#"{"title":"legacy"}"#).unwrap();
+        std::fs::write(legacy.join("202.json"), br#"{"title":"legacy","owner":777}"#).unwrap();
         std::fs::write(current.join("202.deckcraft"), b"current recovery").unwrap();
         std::fs::write(current.join("202.json"), br#"{"title":"current"}"#).unwrap();
 
+        let owner_lock = std::fs::File::create(legacy.join("owner-777.lock")).unwrap();
+        owner_lock.try_lock().unwrap();
+        preserve_legacy_recovery(&legacy, &current);
+        assert!(
+            !std::fs::read_dir(&current)
+                .unwrap()
+                .filter_map(Result::ok)
+                .any(|entry| { std::fs::read(entry.path()).ok().as_deref() == Some(&b"legacy collision payload"[..]) }),
+            "do not copy an entry while its owner lock is held in the old folder"
+        );
+        drop(owner_lock);
         preserve_legacy_recovery(&legacy, &current);
         let migrated_collision = std::fs::read_dir(&current)
             .unwrap()
