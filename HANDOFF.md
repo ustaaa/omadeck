@@ -36,3 +36,11 @@ PNG/SVG/ICO structure (where applicable), deterministic regeneration and whitesp
 checks passed. No engine, document, command, dependency or version changes.
 Installed-app validation of these new assets is still pending; previous runtime
 evidence does not cover this polish. Existing CI limitations remain open.
+
+### Suite review follow-up (2026-10-31)
+Linux pilot policy documents native Wayland and `OMADECK_X11=1`; existing
+`DECKCRAFT_WAYLAND` remains accepted. Recovery now uses the OmaDeck XDG data path;
+legacy config recovery entries are copied without overwriting, with uid collisions
+assigned a fresh recoverable id while the old files remain. Added a focused migration
+test. Formatting and diff checks pass; Rust test execution could not access the Cargo
+git checkout outside the writable workspace.

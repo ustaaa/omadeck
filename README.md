@@ -7,7 +7,7 @@ OmaDeck adapts [DeckCraft](https://github.com/storytold/deckcraft) to Omarchy an
 
 The presentation engine, file formats, slide rendering, text layout, media codecs, commands and existing ribbon arrangement remain upstream-compatible. Omarchy v3/v4 colors and an optional fontconfig monospace face apply to interface chrome. Slide, chart, notes and print/PDF typography keep their original font paths. Preferences offer Follow Desktop and manual appearance; live font changes wait until editing/input is idle.
 
-Public executables are `omadeck` and `omadeck-cli`; internal Rust package names stay `deckcraft` and `deckcraft-cli`. Desktop ID: `io.github.ustaaa.OmaDeck`. Configuration, logs and recovery live in OmaDeck's own configuration directory. Automatic upstream updates and release publishing are disabled. The installed Omarchy pilot launcher selects native Wayland with `OMADECK_WAYLAND=1` to avoid fractional-scaling blur. Direct binary invocations retain upstream display selection; `env -u OMADECK_WAYLAND -u DECKCRAFT_WAYLAND omadeck` explicitly allows the X11 fallback.
+Public executables are `omadeck` and `omadeck-cli`; internal Rust package names stay `deckcraft` and `deckcraft-cli`. Desktop ID: `io.github.ustaaa.OmaDeck`. Configuration and logs use OmaDeck's config directory; recovery uses `$XDG_DATA_HOME/omadeck/recovery` (default `~/.local/share/omadeck/recovery`). Existing config-dir recovery files are copied without overwriting and left in place. Automatic upstream updates and release publishing are disabled. The installed Omarchy pilot launcher selects native Wayland with `OMADECK_WAYLAND=1`; set `OMADECK_X11=1` to force X11, or unset `OMADECK_WAYLAND` and legacy `DECKCRAFT_WAYLAND` to let winit choose.
 
 ## Build and validate
 
