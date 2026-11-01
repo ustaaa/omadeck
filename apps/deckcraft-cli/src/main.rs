@@ -47,7 +47,11 @@ fn main() -> ExitCode {
             },
         },
         Some("--version" | "-V" | "version") => {
-            outln!("omadeck-cli {} (upstream DeckCraft {})", include_str!("../../../oma-version.txt").trim_ascii(), env!("CARGO_PKG_VERSION"));
+            outln!(
+                "omadeck-cli {} (upstream DeckCraft {})",
+                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../OMA_VERSION")).trim_ascii(),
+                env!("CARGO_PKG_VERSION")
+            );
             ExitCode::SUCCESS
         }
         Some("info") => report(info(rest)),

@@ -19,7 +19,7 @@ set -euo pipefail
 HERE="$ROOT/packaging/linux"
 APP_ID=io.github.ustaaa.OmaDeck
 UPSTREAM_VERSION="$(workspace_version)"
-VERSION="$(tr -d '\r\n' < "$ROOT/oma-version.txt")"
+VERSION="$(tr -d '\r\n' < "$ROOT/OMA_VERSION")"
 [[ -n "$VERSION" ]] || { echo "error: empty OmaDeck version label" >&2; exit 1; }
 
 verify_sha256() {
