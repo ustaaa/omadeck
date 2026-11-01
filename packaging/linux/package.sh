@@ -18,6 +18,9 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 HERE="$ROOT/packaging/linux"
 APP_ID=io.github.ustaaa.OmaDeck
+UPSTREAM_VERSION="$VERSION"
+VERSION="$(tr -d '\r\n' < "$ROOT/oma-version.txt")"
+[[ -n "$VERSION" ]] || { echo "error: empty OmaDeck version label" >&2; exit 1; }
 
 verify_sha256() {
   local expected="$1"
@@ -76,6 +79,7 @@ done
 install -Dm644 "$ROOT/assets/omadeck-icon/$APP_ID.svg" "$STAGE/usr/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 mkdir -p "$STAGE/usr/share/doc/omadeck"
 copy_docs "$STAGE/usr/share/doc/omadeck"
+printf 'OmaDeck %s\nUpstream DeckCraft %s\n' "$VERSION" "$UPSTREAM_VERSION" >"$STAGE/usr/share/doc/omadeck/VERSION.txt"
 
 if command -v desktop-file-validate >/dev/null; then
   desktop-file-validate "$STAGE/usr/share/applications/$APP_ID.desktop"

@@ -372,12 +372,18 @@ fn main() -> eframe::Result {
             return Ok(());
         }
         Startup::Version => {
-            println!("omadeck {}", env!("CARGO_PKG_VERSION"));
+            println!("omadeck {} (upstream DeckCraft {})", include_str!("../../../oma-version.txt").trim(), env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         Startup::Run { control_port, files, sample, show } => (control_port, files, sample, show),
     };
-    log::info!("OmaDeck {} ({} {})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH);
+    log::info!(
+        "OmaDeck {} (upstream DeckCraft {}; {} {})",
+        include_str!("../../../oma-version.txt").trim(),
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
     // The log file lives under the settings directory; opened after the arguments, so `--help` and
     // `--version` leave no file behind. Records logged until now are written to it first.
     if let Some(logger) = logger {

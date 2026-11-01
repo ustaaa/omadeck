@@ -57,3 +57,11 @@ Preferences, recovery and the control port now read only `OMADECK_NO_PREFS`,
 so values exported for an upstream DeckCraft install cannot switch off OmaDeck
 preferences or recovery or bind the same control port. `DECKCRAFT_WAYLAND` stays as the
 documented backend alias. A unit test proves upstream names are ignored.
+
+### Alpha version reporting (2026-11-01)
+Downstream label `0.12.0-oma.1.alpha.1` is shown by GUI About and
+`omadeck --version` / `omadeck-cli --version`; output names upstream DeckCraft 0.12.0
+separately. Linux packages use the downstream label and include `VERSION.txt` with both
+versions. Cargo package versions and lockfile are unchanged. Rust builds/runtime and
+package artifact verification are delegated to Halo; local formatting, shell syntax and
+diff whitespace checks passed.
