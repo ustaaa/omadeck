@@ -65,3 +65,13 @@ separately. Linux packages use the downstream label and include `VERSION.txt` wi
 versions. Cargo package versions and lockfile are unchanged. Rust builds/runtime and
 package artifact verification are delegated to Halo; local formatting, shell syntax and
 diff whitespace checks passed.
+
+### DeckCraft v0.13.1 integration candidate (2026-11-01)
+
+Prepared in isolated checkout `/Users/irtek/Development/omacraft-integration-20261101/omadeck` on `codex/upstream-deck-0.13.1`; canonical checkout was not edited. Base is OmaDeck alpha 1 `cd1aacb136baec379e05a95262dcfbc1aaf6a802`; exact upstream tag `v0.13.1` resolves to commit `4ce2944630b04188dee8504c14151994d06c416a` (common ancestor `29f0f7772c47aa2bfb74fcbb0c4d3b1503300849`).
+
+Resolved nine textual conflicts: `AGENTS.md`, `Cargo.lock`, CLI help/main, desktop main, UI updater/lib, and both Oma Flatpak manifests. Kept the Oma CLI/app names, startup/version reporting, Omarchy appearance hooks, installer-managed update notice, and offline/no-network Flatpak policy. Integrated upstream CLI command-file and closed-stdout behavior plus multi-root automation reporting. Upstream self-updater startup/UI and its `craft-update` application dependency were excluded to keep update channels isolated. Retained upstream release content elsewhere, including ribbon and command changes.
+
+Cargo workspace package version is `0.13.1`; downstream `OMA_VERSION` is `0.13.1-oma.1.alpha.1`. No new direct app dependencies were added beyond the release; `craft-update` was removed from the workspace dependency table because Oma updates remain installation-managed. The lock keeps the release's dependency versions, removes updater-only dependency edges and retains Oma's pinned `craft-platform` appearance dependency. Rust minimum remains 1.95. Upstream changed font database code/tests only; no font assets, font manifest, or `CRAFT_FONTS_DIR` input changed. Actual font input revision was not checked in this checkout.
+
+`git diff --check` passed. `cargo metadata --offline --locked` resolved the graph but exited when it tried to download uncached `accesskit 0.25.1`; no compile or tests were run here. `cargo fmt --all -- --check` and merge-diff review remain pending before commit. Halo owns build/test validation. This branch is not pushed, merged to pilot/main, tagged, or deployed.
