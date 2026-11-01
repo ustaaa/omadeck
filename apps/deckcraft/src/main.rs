@@ -372,14 +372,14 @@ fn main() -> eframe::Result {
             return Ok(());
         }
         Startup::Version => {
-            println!("omadeck {} (upstream DeckCraft {})", include_str!("../../../oma-version.txt").trim(), env!("CARGO_PKG_VERSION"));
+            println!("omadeck {} (upstream DeckCraft {})", include_str!("../../../oma-version.txt").trim_ascii(), env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
         Startup::Run { control_port, files, sample, show } => (control_port, files, sample, show),
     };
     log::info!(
         "OmaDeck {} (upstream DeckCraft {}; {} {})",
-        include_str!("../../../oma-version.txt").trim(),
+        include_str!("../../../oma-version.txt").trim_ascii(),
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH
