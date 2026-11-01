@@ -79,6 +79,8 @@ impl SlideApp {
             pending_urls: vec![],
             #[cfg(not(target_arch = "wasm32"))]
             updates_rt: updates_ui::Runtime::default(),
+            appearance: Default::default(),
+            desktop_theme: Default::default(),
             pending_copy: None,
             capture: capture::Capture::default(),
             styled: false,
@@ -123,8 +125,14 @@ impl SlideApp {
         self.status = Some((msg.into(), now_ms()));
     }
 
-    /// Turn on the automatic check for a newer release at start-up (desktop shell only; tests and
-    /// the web build never touch the network on their own).
+    /// Follow desktop appearance in the native host; test/embedded contexts stay deterministic.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enable_desktop_appearance(&mut self) {
+        self.appearance = crate::omarchy::Watcher::start();
+        self.desktop_theme = crate::desktop_theme::DesktopTheme::start();
+    }
+
+    /// Compatibility entry point; development updates are installation-managed.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn enable_update_checks(&mut self) {
         updates_ui::enable(self);

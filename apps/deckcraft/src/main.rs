@@ -4,7 +4,7 @@
 //! A PowerPoint Show (`.ppsx`) given last starts its slide show, as a double-click does in PowerPoint.
 //! `deckcraft --help` prints the flags and exits. `deckcraft --version` prints the version and exits.
 //!
-//! `--control <port>` (or `DECKCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server:
+//! `--control <port>` (or `OMADECK_CONTROL_PORT`) starts a localhost JSON-lines control server:
 //! `{"id":1,"method":"ui.inspect","params":{}}` → `{"id":1,"ok":true,"result":…}`.
 //! See `deckcraft_ui_egui::control` for the methods.
 //!
@@ -67,19 +67,193 @@ impl eframe::App for App {
 /// The per-user settings directory: `ui.json`, `prefs.json` and `logs/` live here.
 fn config_dir() -> Option<std::path::PathBuf> {
     if cfg!(target_os = "macos") {
-        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support/DeckCraft"))
+        std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Library/Application Support/OmaDeck"))
     } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join("DeckCraft"))
+        std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join("OmaDeck"))
     } else {
         std::env::var_os("XDG_CONFIG_HOME")
             .map(std::path::PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
-            .map(|c| c.join("deckcraft"))
+            .map(|c| c.join("omadeck"))
     }
 }
 
+/// Copy valid legacy recovery entries to data, remapping UID collisions and preserving the source.
+/// Fingerprint markers make the copy idempotent even after the recovered entry changes.
+fn preserve_legacy_recovery(legacy: &std::path::Path, current: &std::path::Path) {
+    if legacy == current || !legacy.is_dir() {
+        return;
+    }
+    let result = (|| -> std::io::Result<()> {
+        std::fs::create_dir_all(current)?;
+        for entry in std::fs::read_dir(legacy)? {
+            let entry = entry?;
+            let kind = entry.file_type()?;
+            if !kind.is_file() || entry.path().extension().and_then(std::ffi::OsStr::to_str) != Some("deckcraft") {
+                continue;
+            }
+            let document = entry.path();
+            let metadata = document.with_extension("json");
+            let Some(source_uid) =
+                document.file_stem().and_then(std::ffi::OsStr::to_str).and_then(|s| s.parse::<u64>().ok()).filter(|uid| *uid <= ((1 << 53) - 1))
+            else {
+                continue;
+            };
+            let owner = metadata
+                .is_file()
+                .then(|| std::fs::read(&metadata))
+                .transpose()?
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                .and_then(|value| value.get("owner").and_then(serde_json::Value::as_u64));
+            if owner.is_some_and(|owner| deckcraft_engine::recovery::owner_alive(legacy, owner)) {
+                continue;
+            }
+            let fingerprint = legacy_recovery_fingerprint(&document, &metadata)?;
+            let marker = current.join(format!(".omadeck-migrated-{source_uid}-{fingerprint:016x}"));
+            if marker.exists() {
+                continue;
+            }
+            // A prior migration may have had to remap a colliding uid. Detect that copy by its
+            // payload before trying to allocate another id, making startup migration idempotent.
+            if recovery_payload_exists(current, &document, &metadata)? {
+                continue;
+            }
+            let original = recovery_paths(current, source_uid);
+            let (destination_document, destination_metadata) = if !original.0.exists() && !original.1.exists() {
+                original
+            } else {
+                let mut uid = source_uid.wrapping_add(0x5f3759df) & ((1 << 53) - 1);
+                let mut available = None;
+                for _ in 0..1024 {
+                    let candidate = recovery_paths(current, uid);
+                    if !candidate.0.exists() && !candidate.1.exists() {
+                        available = Some(candidate);
+                        break;
+                    }
+                    uid = uid.wrapping_add(1) & ((1 << 53) - 1);
+                }
+                let Some(candidate) = available else {
+                    log::warn!("no free recovery uid found for legacy entry {}", document.display());
+                    continue;
+                };
+                candidate
+            };
+            copy_without_overwrite(&document, &destination_document)?;
+            if metadata.is_file()
+                && let Err(error) = copy_without_overwrite(&metadata, &destination_metadata)
+            {
+                let _ = std::fs::remove_file(destination_document);
+                return Err(error);
+            }
+            match std::fs::OpenOptions::new().write(true).create_new(true).open(marker) {
+                Ok(mut file) => std::io::Write::write_all(&mut file, b"v1")?,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        log::warn!("could not preserve legacy recovery from {}: {error}", legacy.display());
+    }
+}
+
+fn recovery_paths(directory: &std::path::Path, uid: u64) -> (std::path::PathBuf, std::path::PathBuf) {
+    (directory.join(format!("{uid}.deckcraft")), directory.join(format!("{uid}.json")))
+}
+
+fn legacy_recovery_fingerprint(document: &std::path::Path, metadata: &std::path::Path) -> std::io::Result<u64> {
+    let mut hash = 0xcbf29ce484222325_u64;
+    let mut update = |bytes: &[u8]| {
+        for byte in bytes {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash ^= 0xff;
+        hash = hash.wrapping_mul(0x100000001b3);
+    };
+    update(&std::fs::read(document)?);
+    if metadata.is_file() {
+        update(&std::fs::read(metadata)?);
+    }
+    Ok(hash)
+}
+
+fn recovery_payload_exists(directory: &std::path::Path, document: &std::path::Path, metadata: &std::path::Path) -> std::io::Result<bool> {
+    let expected_document = std::fs::read(document)?;
+    let expected_metadata = metadata.is_file().then(|| std::fs::read(metadata)).transpose()?;
+    for entry in std::fs::read_dir(directory)? {
+        let entry = entry?;
+        if entry.path().extension().and_then(std::ffi::OsStr::to_str) != Some("deckcraft")
+            || entry.path().file_stem().and_then(std::ffi::OsStr::to_str).and_then(|s| s.parse::<u64>().ok()).is_none()
+        {
+            continue;
+        }
+        if std::fs::read(entry.path()).ok().as_deref() != Some(expected_document.as_slice()) {
+            continue;
+        }
+        let found_metadata = entry.path().with_extension("json");
+        if metadata_equivalent(expected_metadata.as_deref(), found_metadata.as_ref())? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn metadata_equivalent(expected: Option<&[u8]>, found: &std::path::Path) -> std::io::Result<bool> {
+    let actual = found.is_file().then(|| std::fs::read(found)).transpose()?;
+    match (expected, actual.as_deref()) {
+        (None, None) => Ok(true),
+        (Some(left), Some(right)) => {
+            let normalize = |bytes: &[u8]| -> Option<serde_json::Value> {
+                let mut value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+                value.as_object_mut()?.remove("owner");
+                Some(value)
+            };
+            Ok(match (normalize(left), normalize(right)) {
+                (Some(left), Some(right)) => left == right,
+                _ => left == right,
+            })
+        }
+        _ => Ok(false),
+    }
+}
+
+fn copy_without_overwrite(source: &std::path::Path, destination: &std::path::Path) -> std::io::Result<()> {
+    let mut source = std::fs::File::open(source)?;
+    let destination_path = destination.to_path_buf();
+    let mut destination = std::fs::OpenOptions::new().write(true).create_new(true).open(destination)?;
+    if let Err(error) = std::io::copy(&mut source, &mut destination) {
+        let _ = std::fs::remove_file(destination_path);
+        return Err(error);
+    }
+    Ok(())
+}
+
+/// Only OmaDeck's own names are read for preferences, recovery and the control port. A
+/// `DECKCRAFT_` value exported for an upstream DeckCraft install must not change OmaDeck.
+fn prefs_enabled() -> bool {
+    prefs_enabled_from(|name| std::env::var_os(name))
+}
+
+fn prefs_enabled_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    var(NO_PREFS).is_none()
+}
+
+fn recovery_enabled_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool {
+    var(NO_RECOVERY).is_none()
+}
+
+fn control_port_from(var: impl Fn(&str) -> Option<String>) -> Option<u16> {
+    var(CONTROL_PORT).and_then(|p| p.parse().ok())
+}
+
+const NO_PREFS: &str = "OMADECK_NO_PREFS";
+const NO_RECOVERY: &str = "OMADECK_NO_RECOVERY";
+const CONTROL_PORT: &str = "OMADECK_CONTROL_PORT";
+
 fn load_prefs(app: &mut SlideApp) {
-    if std::env::var_os("DECKCRAFT_NO_PREFS").is_some() {
+    if !prefs_enabled() {
         return;
     }
     let Some(dir) = config_dir() else { return };
@@ -93,7 +267,7 @@ fn load_prefs(app: &mut SlideApp) {
 }
 
 fn save_prefs(app: &SlideApp) {
-    if std::env::var_os("DECKCRAFT_NO_PREFS").is_some() {
+    if !prefs_enabled() {
         return;
     }
     if let Some(dir) = config_dir() {
@@ -135,7 +309,7 @@ fn services() -> Services {
     }
 }
 
-const APP_ID: &str = "ai.storyteller.deckcraft";
+const APP_ID: &str = "io.github.ustaaa.OmaDeck";
 
 const USAGE: &str = "\
 Usage: deckcraft [--control PORT] [--sample] [--show] [FILE...]
@@ -177,36 +351,43 @@ fn startup(mut control_port: Option<u16>, args: impl IntoIterator<Item = String>
 }
 
 fn app_icon() -> Option<egui::IconData> {
-    let png: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.deckcraft.png");
+    let png: &[u8] = include_bytes!("../../../assets/omadeck-icon/256/io.github.ustaaa.OmaDeck.png");
     eframe::icon_data::from_png_bytes(png).map_err(|e| log::warn!("app icon: {e}")).ok()
 }
 
 /// Install logging, parse startup arguments and environment, launch the native app, and
 /// propagate an eframe startup failure.
+#[cfg(any(test, all(unix, not(target_os = "macos"))))]
+fn x11_override(value: Option<&std::ffi::OsStr>) -> bool {
+    value == Some(std::ffi::OsStr::new("1"))
+}
+
 fn main() -> eframe::Result {
     // First, so every start-up record (and the engine's panic hook, installed with the first
     // Session) is captured; see `logging`.
     let logger = logging::install();
-    if let Some(done) = craft_update::self_update::finish(&craft_update::suite::DECKCRAFT, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
-        if let Err(e) = done {
-            eprintln!("DeckCraft update helper failed: {e}");
-            std::process::exit(1);
+    let (control_port, files, sample, show) = match startup(control_port_from(|name| std::env::var(name).ok()), std::env::args().skip(1)) {
+        Startup::Help => {
+            print!("{USAGE}");
+            return Ok(());
         }
-        return Ok(());
-    }
-    let (control_port, files, sample, show) =
-        match startup(std::env::var("DECKCRAFT_CONTROL_PORT").ok().and_then(|p| p.parse().ok()), std::env::args().skip(1)) {
-            Startup::Help => {
-                print!("{USAGE}");
-                return Ok(());
-            }
-            Startup::Version => {
-                println!("deckcraft {}", env!("CARGO_PKG_VERSION"));
-                return Ok(());
-            }
-            Startup::Run { control_port, files, sample, show } => (control_port, files, sample, show),
-        };
-    log::info!("DeckCraft {} ({} {})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH);
+        Startup::Version => {
+            println!(
+                "omadeck {} (upstream DeckCraft {})",
+                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../OMA_VERSION")).trim_ascii(),
+                env!("CARGO_PKG_VERSION")
+            );
+            return Ok(());
+        }
+        Startup::Run { control_port, files, sample, show } => (control_port, files, sample, show),
+    };
+    log::info!(
+        "OmaDeck {} (upstream DeckCraft {}; {} {})",
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../OMA_VERSION")).trim_ascii(),
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
     // The log file lives under the settings directory; opened after the arguments, so `--help` and
     // `--version` leave no file behind. Records logged until now are written to it first.
     if let Some(logger) = logger {
@@ -221,7 +402,7 @@ fn main() -> eframe::Result {
     }
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("DeckCraft")
+            .with_title("OmaDeck")
             .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([900.0, 560.0])
             .with_drag_and_drop(true)
@@ -235,16 +416,19 @@ fn main() -> eframe::Result {
         options.viewport = options.viewport.with_icon(icon);
     }
     #[cfg(all(unix, not(target_os = "macos")))]
-    let x11 = match display::choose_from_env() {
-        display::Choice::X11 => true,
-        display::Choice::Default => false,
-        display::Choice::None => {
-            // winit's own error says little to someone who started DeckCraft from a console.
-            log::error!("no display: DISPLAY and WAYLAND_DISPLAY are not set");
-            eprintln!("DeckCraft needs a graphical session: neither DISPLAY nor WAYLAND_DISPLAY is set.");
-            false
-        }
-    };
+    // Linux pilot policy: launchers opt into native Wayland for direct compositor scaling.
+    // OMADECK_X11=1 explicitly forces X11; unset OMADECK_WAYLAND to use winit's default.
+    let x11 = x11_override(std::env::var_os("OMADECK_X11").as_deref())
+        || match display::choose_from_env() {
+            display::Choice::X11 => true,
+            display::Choice::Default => false,
+            display::Choice::None => {
+                // winit's own error says little to someone who started DeckCraft from a console.
+                log::error!("no display: DISPLAY and WAYLAND_DISPLAY are not set");
+                eprintln!("OmaDeck needs a graphical session: neither DISPLAY nor WAYLAND_DISPLAY is set.");
+                false
+            }
+        };
     #[cfg(all(unix, not(target_os = "macos")))]
     if x11 {
         options.event_loop_builder = Some(Box::new(|b| {
@@ -262,16 +446,19 @@ fn main() -> eframe::Result {
     #[cfg(target_os = "macos")]
     let apple_events = &apple_events;
     eframe::run_native(
-        "DeckCraft",
+        "OmaDeck",
         options,
         Box::new(move |cc| {
             deckcraft_ui_egui::install_ime_pass_hooks(&cc.egui_ctx);
             let mut app = SlideApp::new(Session::new(), services());
             load_prefs(&mut app);
-            app.enable_update_checks();
+            app.enable_desktop_appearance();
             // AutoRecover: reopen what a previous run left unsaved, then keep it current.
-            if std::env::var_os("DECKCRAFT_NO_RECOVERY").is_none() {
+            if recovery_enabled_from(|name| std::env::var_os(name)) {
                 app.session.recovery_dir = deckcraft_engine::recovery::default_dir();
+                if let (Some(current), Some(config)) = (&app.session.recovery_dir, config_dir()) {
+                    preserve_legacy_recovery(&config.join("recovery"), current);
+                }
                 if let Ok(v) = app.session.execute("file.recovery.open", &serde_json::json!({}))
                     && let Some(n) = v.get("opened").and_then(|o| o.as_array()).map(Vec::len).filter(|n| *n > 0)
                 {
@@ -306,6 +493,78 @@ fn main() -> eframe::Result {
 mod tests {
     use super::*;
 
+    #[test]
+    fn upstream_names_do_not_reach_preferences_recovery_or_the_control_port() {
+        let upstream = |name: &str| name.starts_with("DECKCRAFT_").then(|| "7979".to_string());
+        assert!(prefs_enabled_from(|name| upstream(name).map(Into::into)));
+        assert!(recovery_enabled_from(|name| upstream(name).map(Into::into)));
+        assert_eq!(control_port_from(upstream), None);
+        let ours = |name: &str| name.starts_with("OMADECK_").then(|| "7980".to_string());
+        assert!(!prefs_enabled_from(|name| ours(name).map(Into::into)));
+        assert!(!recovery_enabled_from(|name| ours(name).map(Into::into)));
+        assert_eq!(control_port_from(ours), Some(7980));
+    }
+
+    #[test]
+    fn only_one_enables_x11_override() {
+        assert!(x11_override(Some(std::ffi::OsStr::new("1"))));
+        assert!(!x11_override(Some(std::ffi::OsStr::new("0"))));
+        assert!(!x11_override(Some(std::ffi::OsStr::new(""))));
+        assert!(!x11_override(None));
+    }
+
+    #[test]
+    fn legacy_recovery_copy_preserves_source_and_never_overwrites() {
+        let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("omadeck-recovery-migration-{}-{unique}", std::process::id()));
+        let legacy = root.join("old");
+        let current = root.join("new");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::create_dir_all(&current).unwrap();
+        std::fs::write(legacy.join("101.deckcraft"), b"legacy recovery").unwrap();
+        std::fs::write(legacy.join("202.deckcraft"), b"legacy collision payload").unwrap();
+        std::fs::write(legacy.join("202.json"), br#"{"title":"legacy","owner":777}"#).unwrap();
+        std::fs::write(current.join("202.deckcraft"), b"current recovery").unwrap();
+        std::fs::write(current.join("202.json"), br#"{"title":"current"}"#).unwrap();
+
+        let owner_lock = std::fs::File::create(legacy.join("owner-777.lock")).unwrap();
+        owner_lock.try_lock().unwrap();
+        preserve_legacy_recovery(&legacy, &current);
+        assert!(
+            !std::fs::read_dir(&current)
+                .unwrap()
+                .filter_map(Result::ok)
+                .any(|entry| { std::fs::read(entry.path()).ok().as_deref() == Some(&b"legacy collision payload"[..]) }),
+            "do not copy an entry while its owner lock is held in the old folder"
+        );
+        drop(owner_lock);
+        preserve_legacy_recovery(&legacy, &current);
+        let migrated_collision = std::fs::read_dir(&current)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.extension().is_some_and(|ext| ext == "deckcraft")
+                    && std::fs::read(path).ok().as_deref() == Some(&b"legacy collision payload"[..])
+            })
+            .expect("the colliding legacy entry should be copied under a fresh uid");
+        assert!(migrated_collision.file_stem().and_then(std::ffi::OsStr::to_str).and_then(|s| s.parse::<u64>().ok()).is_some());
+        let migrated_metadata = migrated_collision.with_extension("json");
+        std::fs::write(&migrated_metadata, br#"{"title":"legacy","owner":987654321}"#).unwrap();
+        let before_rerun = std::fs::read_dir(&current).unwrap().count();
+
+        preserve_legacy_recovery(&legacy, &current);
+
+        assert_eq!(std::fs::read(current.join("101.deckcraft")).unwrap(), b"legacy recovery");
+        assert_eq!(std::fs::read(current.join("202.deckcraft")).unwrap(), b"current recovery");
+        assert_eq!(std::fs::read(current.join("202.json")).unwrap(), br#"{"title":"current"}"#);
+        assert_eq!(std::fs::read(legacy.join("101.deckcraft")).unwrap(), b"legacy recovery");
+        assert_eq!(std::fs::read(legacy.join("202.deckcraft")).unwrap(), b"legacy collision payload");
+        assert_eq!(std::fs::read_dir(&current).unwrap().count(), before_rerun, "rerunning migration must not duplicate entries");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
     /// #279: on macOS the process ends inside `on_exit`, before eframe would tear the window down.
     /// The check runs in a child (this test binary again), since on macOS it ends the process.
     #[test]
@@ -324,7 +583,7 @@ mod tests {
         let out = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "tests::on_exit_ends_the_process_on_macos", "--nocapture"])
             .env("DECKCRAFT_TEST_ON_EXIT", "1")
-            .env("DECKCRAFT_NO_PREFS", "1")
+            .env(NO_PREFS, "1")
             .output()
             .unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
@@ -390,7 +649,7 @@ mod tests {
     fn every_desktop_offers_the_same_file_types() {
         let plist = include_str!("../../../packaging/macos/Info.plist.in");
         let wxs = include_str!("../../../packaging/windows/deckcraft.wxs");
-        let desktop = include_str!("../../../packaging/linux/ai.storyteller.deckcraft.desktop");
+        let desktop = include_str!("../../../packaging/linux/io.github.ustaaa.OmaDeck.desktop");
 
         let mut mac = plist_strings(plist, "CFBundleTypeExtensions");
         // The native type is declared by its UTI; its extension is in the exported type.

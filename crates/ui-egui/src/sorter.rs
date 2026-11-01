@@ -392,7 +392,7 @@ pub fn notes_page(app: &mut SlideApp, ui: &mut Ui) {
             let size = (piece.size as f32 * k).max(4.0);
             let at = page.min + vec2(piece.at.0 as f32 * k, piece.at.1 as f32 * k - size * 0.8);
             let c = Color32::from_rgba_unmultiplied(piece.color.r, piece.color.g, piece.color.b, piece.color.a);
-            ui.painter().text(at, egui::Align2::LEFT_TOP, &piece.text, theme::font(size), c);
+            ui.painter().text(at, egui::Align2::LEFT_TOP, &piece.text, egui::FontId::proportional(size), c);
         }
     }
     let ppp = ui.ctx().pixels_per_point();

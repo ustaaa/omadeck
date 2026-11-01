@@ -1,4 +1,4 @@
-//! Headless DeckCraft. `deckcraft-cli help` explains each subcommand (`help.rs`).
+//! Headless OmaDeck. `omadeck-cli help` explains each subcommand (`help.rs`).
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
@@ -18,7 +18,7 @@ macro_rules! outln {
             if e.kind() == std::io::ErrorKind::BrokenPipe {
                 std::process::exit(0);
             }
-            eprintln!("deckcraft-cli: can't write to stdout: {e}");
+            eprintln!("omadeck-cli: can't write to stdout: {e}");
             std::process::exit(1);
         }
     }};
@@ -47,7 +47,11 @@ fn main() -> ExitCode {
             },
         },
         Some("--version" | "-V" | "version") => {
-            outln!("deckcraft-cli {}", env!("CARGO_PKG_VERSION"));
+            outln!(
+                "omadeck-cli {} (upstream DeckCraft {})",
+                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../OMA_VERSION")).trim_ascii(),
+                env!("CARGO_PKG_VERSION")
+            );
             ExitCode::SUCCESS
         }
         Some("info") => report(info(rest)),
@@ -92,7 +96,7 @@ fn help_page(name: &str) -> String {
 }
 
 fn unknown(sub: &str) -> ExitCode {
-    eprintln!("deckcraft-cli: unknown subcommand `{sub}`\n");
+    eprintln!("omadeck-cli: unknown subcommand `{sub}`\n");
     usage()
 }
 
@@ -106,7 +110,7 @@ fn report(r: Result<(), String>) -> ExitCode {
     match r {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("deckcraft-cli: {e}");
+            eprintln!("omadeck-cli: {e}");
             ExitCode::FAILURE
         }
     }
@@ -131,10 +135,10 @@ fn warn_if_damaged(path: &str, opened: &serde_json::Value) {
     let count = |key: &str| opened.get(key).and_then(|v| v.as_array()).map_or(0, |a| a.len());
     let (slides, media) = (count("lostSlides"), count("damagedMedia"));
     if slides > 0 {
-        eprintln!("deckcraft-cli: warning: {path}: {slides} slide{} couldn't be read and left out", if slides == 1 { "" } else { "s" });
+        eprintln!("omadeck-cli: warning: {path}: {slides} slide{} couldn't be read and left out", if slides == 1 { "" } else { "s" });
     }
     if media > 0 {
-        eprintln!("deckcraft-cli: warning: {path}: {media} picture or media file{} couldn't be read", if media == 1 { "" } else { "s" });
+        eprintln!("omadeck-cli: warning: {path}: {media} picture or media file{} couldn't be read", if media == 1 { "" } else { "s" });
     }
 }
 
@@ -543,7 +547,7 @@ fn describe(id: Option<&str>) -> Result<(), String> {
     }
     let bare = params.is_empty() || params.iter().any(|p| params.iter().filter(|q| q.object == p.object).all(|q| q.optional));
     let call = if bare { c.id.to_string() } else { format!("'{}={{…}}'", c.id) };
-    outln!("\nRun it with: deckcraft-cli run --cmd {call}");
+    outln!("\nRun it with: omadeck-cli run --cmd {call}");
     Ok(())
 }
 
@@ -588,7 +592,7 @@ fn app(args: &[String]) -> Result<(), String> {
         }
     }
     let mut r = Remote::connect(&control_addr(&port))
-        .map_err(|e| format!("no DeckCraft app on port {port} ({e}); start it with `deckcraft --control {port}`"))?;
+        .map_err(|e| format!("no OmaDeck app on port {port} ({e}); start it with `deckcraft --control {port}`"))?;
     let parse = |s: Option<&String>| -> Result<Value, String> {
         s.map(|j| serde_json::from_str(j).map_err(|e| format!("bad JSON: {e}"))).transpose().map(|v| v.unwrap_or(json!({})))
     };
@@ -642,7 +646,7 @@ so drop --connect (or use --connect without the roots)"
                 // Every thread of this process, not only the server's: nothing reaches past the roots.
                 file_access::confine_process(roots.clone());
                 let show = |root: Option<&std::path::Path>| root.map_or_else(|| "none".to_string(), |r| r.display().to_string());
-                eprintln!("deckcraft-cli: files confined: read root {}, write root {}", show(roots.read_root()), show(roots.write_root()));
+                eprintln!("omadeck-cli: files confined: read root {}, write root {}", show(roots.read_root()), show(roots.write_root()));
                 h = h.with_automation_roots(Some(roots));
             }
             Box::new(h)
@@ -688,7 +692,7 @@ mod tests {
 
     #[test]
     fn render_refuses_an_unknown_option_instead_of_writing_it_as_a_file() {
-        let out = std::env::temp_dir().join("deckcraft-cli-unknown-option.png");
+        let out = std::env::temp_dir().join("omadeck-cli-unknown-option.png");
         let _ = std::fs::remove_file(&out);
         for flag in ["--bogus", "-x"] {
             let args: Vec<String> = ["--sample", flag, &out.to_string_lossy()].iter().map(|a| a.to_string()).collect();
@@ -701,7 +705,7 @@ mod tests {
     /// `render --transparent` leaves the slide background out (#784): the corner is transparent.
     #[test]
     fn render_transparent_leaves_the_background_out() {
-        let dir = std::env::temp_dir().join(format!("deckcraft-cli-transparent-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omadeck-cli-transparent-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let alpha = |path: &std::path::Path| deckcraft_engine::render::decode_image(&std::fs::read(path).unwrap()).unwrap().get_pixel(1, 1).0[3];
         let opaque = dir.join("opaque.png");
@@ -716,7 +720,7 @@ mod tests {
     /// `run --export OUT.gif --export-params JSON` and `convert IN OUT.gif` write animated GIFs.
     #[test]
     fn exports_an_animated_gif() {
-        let dir = std::env::temp_dir().join(format!("deckcraft-cli-gif-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omadeck-cli-gif-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let gif = dir.join("sample.gif").to_string_lossy().to_string();
         let deck = dir.join("sample.deckcraft").to_string_lossy().to_string();

@@ -51,6 +51,8 @@ pub enum ViewMode {
 #[serde(default, rename_all = "camelCase")]
 pub struct UiState {
     pub brightness: theme::Brightness,
+    /// Follow Omarchy/desktop chrome; never modifies presentation styles.
+    pub follow_desktop: bool,
     pub tab: String,
     pub ribbon_collapsed: bool,
     pub view: ViewMode,
@@ -97,6 +99,7 @@ impl Default for UiState {
     fn default() -> Self {
         UiState {
             brightness: theme::Brightness::Light,
+            follow_desktop: true,
             tab: "Home".into(),
             ribbon_collapsed: false,
             view: ViewMode::Normal,

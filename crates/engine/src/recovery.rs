@@ -26,12 +26,12 @@ use crate::{DocState, EngineError, Result, Session};
 pub fn default_dir() -> Option<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     if cfg!(target_os = "macos") {
-        return home.map(|h| h.join("Library/Application Support/DeckCraft/Recovery"));
+        return home.map(|h| h.join("Library/Application Support/OmaDeck/Recovery"));
     }
     if cfg!(target_os = "windows") {
-        return std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("DeckCraft").join("Recovery"));
+        return std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("OmaDeck").join("Recovery"));
     }
-    std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| home.map(|h| h.join(".local/share"))).map(|d| d.join("deckcraft/recovery"))
+    std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).or_else(|| home.map(|h| h.join(".local/share"))).map(|d| d.join("omadeck/recovery"))
 }
 
 /// Uids and instance ids stay below 2^53 so they survive JSON numbers read as `f64`.
@@ -77,8 +77,8 @@ fn claim_dir(dir: &Path) {
     }
 }
 
-/// Whether another running instance holds `owner`'s lock in `dir`.
-fn owner_alive(dir: &Path, owner: u64) -> bool {
+/// Whether another running instance holds `owner`'s recovery lock in `dir`.
+pub fn owner_alive(dir: &Path, owner: u64) -> bool {
     let Ok(f) = File::open(lock_path(dir, owner)) else { return false };
     matches!(f.try_lock(), Err(std::fs::TryLockError::WouldBlock))
 }
@@ -257,6 +257,19 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("deckcraft-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn owner_alive_checks_a_real_held_file_lock() {
+        let dir = temp("recovery-owner-lock");
+        std::fs::create_dir_all(&dir).unwrap();
+        let owner = 123_456;
+        let lock = File::create(lock_path(&dir, owner)).unwrap();
+        lock.try_lock().unwrap();
+        assert!(owner_alive(&dir, owner));
+        drop(lock);
+        assert!(!owner_alive(&dir, owner));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

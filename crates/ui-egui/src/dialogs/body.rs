@@ -1339,17 +1339,32 @@ fn dlg_preferences(app: &mut SlideApp, ui: &mut Ui, d: &mut Dialog) -> bool {
         d.params = json!({ "before": preferences_snapshot(app) });
     }
     ui.label(egui::RichText::new("General").font(theme::bold(13.0)));
+    let mut follow = app.ui.follow_desktop;
+    if ui.checkbox(&mut follow, "Follow desktop appearance").changed() {
+        let _ = app.run("view.systemTheme", json!({"on": follow}));
+    }
     let mut dark = app.ui.brightness == theme::Brightness::Dark;
     if ui.checkbox(&mut dark, "Dark appearance").changed() {
         let _ = app.run("view.dark", json!({"on": dark}));
     }
+    ui.add(
+        egui::Label::new(egui::RichText::new(
+            "Follow desktop appearance also follows desktop chrome fonts. Turn it off to use OmaDeck's built-in UI colors and fonts. Slide and document fonts are unchanged.",
+        ).small().weak()).wrap(),
+    );
     // While the pointer holds the slider its value only waits in the dialog: applying it
     // would rescale the slider under the pointer and run it to an end (#767). It applies
     // on release, and at once from the keyboard.
     let pending = d.fields.get("uiScale").and_then(|v| v.parse::<f32>().ok());
     let mut scale = pending.unwrap_or(app.ui.ui_scale);
     let r = ui.add(egui::Slider::new(&mut scale, 0.75..=1.75));
-    // No visible label here (the row is laid out to fit); the accessible name only.
+    let os_scale = ui.ctx().native_pixels_per_point().filter(|value| value.is_finite() && *value > 0.0);
+    let scale_note = match os_scale {
+        Some(os) => format!("Interface multiplier: {scale:.2}× · OS display scale: {os:.2}×"),
+        None => format!("Interface multiplier: {scale:.2}× · OS display scale: unavailable"),
+    };
+    ui.label(egui::RichText::new(scale_note).small().weak());
+    // No visible slider label here (the row is laid out to fit); the accessible name only.
     let enabled = r.enabled();
     r.widget_info(|| egui::WidgetInfo::slider(enabled, f64::from(scale), "Interface size"));
     if r.is_pointer_button_down_on() {

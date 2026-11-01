@@ -63,6 +63,12 @@ fn presenter_all_slides_does_not_cover_the_audience_screen() {
     let show = Show::new(&doc, 0, false, true);
     let mut harness = egui_kittest::Harness::builder().with_size(vec2(1100.0, 700.0)).build_ui_state(
         |ui, (doc, show, keep): &mut (std::sync::Arc<Presentation>, Show, bool)| {
+            // Standalone presenter harnesses need the same font bootstrap as the host app.
+            if !ui.ctx().data_mut(|d| d.get_temp::<bool>(egui::Id::unique("omadeck-presenter-test-fonts")).unwrap_or(false)) {
+                theme::install_fonts(ui.ctx());
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("omadeck-presenter-test-fonts"), true));
+                return;
+            }
             let now = ui.input(|i| i.time);
             presenter_window(ui.ctx(), show, doc, now, keep);
         },
@@ -287,6 +293,12 @@ fn presenter_navigation_uses_its_own_keyboard_events() {
     let show = Show::new(&doc, 0, false, true);
     let mut harness = egui_kittest::Harness::builder().with_size(vec2(1100.0, 700.0)).build_ui_state(
         |ui, (doc, show, keep): &mut (std::sync::Arc<Presentation>, Show, bool)| {
+            // Standalone presenter harnesses need the same font bootstrap as the host app.
+            if !ui.ctx().data_mut(|d| d.get_temp::<bool>(egui::Id::unique("omadeck-presenter-test-fonts")).unwrap_or(false)) {
+                theme::install_fonts(ui.ctx());
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("omadeck-presenter-test-fonts"), true));
+                return;
+            }
             let now = ui.input(|i| i.time);
             presenter_window(ui.ctx(), show, doc, now, keep);
         },
@@ -786,8 +798,8 @@ fn presenter_notes_keep_bullets_numbers_and_bold() {
         let b = notes_galley.job.text.find(s).unwrap();
         notes_galley.job.sections.iter().find(|x| (x.byte_range.start.0..x.byte_range.end.0).contains(&b)).unwrap().format.font_id.clone()
     };
-    assert_eq!(font_of("Opening"), theme::bold(24.0), "bold runs stay bold at the pane's size");
-    assert_eq!(font_of("Agenda"), theme::font(24.0));
+    assert_eq!(font_of("Opening"), theme::document_bold(24.0), "bold runs stay bold at the pane's size");
+    assert_eq!(font_of("Agenda"), egui::FontId::proportional(24.0));
 }
 
 /// Hidden logic keeps playing from wall time even though `run_logic` leaves egui's input

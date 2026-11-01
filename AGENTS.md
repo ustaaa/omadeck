@@ -1,3 +1,18 @@
+## OmaCraft lifecycle
+
+This repository is one component of https://github.com/ustaaa/omacraft.
+The owner authorized establishing fork commits, private coordination repositories and
+reviewable GitHub branches for the current lifecycle task. This supersedes older
+Nomura-only coordination and private-host CHECKPOINT requirements for that task.
+Preserve unrelated changes. No automatic merge, public release or visibility change.
+Use independent model review plus reproducible tests; see the suite review contract.
+Do not write machine addresses, credentials or private notebook content into tracked
+files. The constrained runtime test machine is not a build host: x86 builds run on
+the designated Linux build host. Keep runtime and build evidence separate.
+
+# OmaDeck workflow override
+The user explicitly authorizes agents to implement, test, commit, push and install this fork directly. No Nomura handoff or prior OmaGrid waiting gate is required. Preserve upstream engine, formats and behavior. Source baseline is v0.12.0 / 29f0f7772c47aa2bfb74fcbb0c4d3b1503300849. Record outcomes and limits in HANDOFF.md. These user instructions override conflicting inherited workflow statements below.
+
 # AGENTS.md — rules for every agent and contributor
 
 DeckCraft is a clean-room, open-source, pure-Rust presentation application targeting Microsoft
@@ -192,3 +207,7 @@ the `ROADMAP.md` progress log, and update each touched doc's status line and rev
   GitHub profiles). Never hand-edit `contributors.json`.
 - Maintainers refresh the stats with `python3 ../../craftrules/scripts/contributors.py .` (it also
   re-verifies who wrote each `people.toml` entry; `--check` only verifies).
+
+## Cost-aware delegation
+
+For routine coding, identity renames, packaging, test helpers, and documentation, delegate to Halogen or another explicitly selected lower-cost subagent. Reserve Astra for architecture, difficult debugging, and final review when needed. Subagents inherit the parent model unless explicitly selected, so always specify the intended lower-cost model for routine work. Verify generated changes and tests. If Halogen is unavailable, do independent useful work or use a suitable lower-cost alternative, and report the limitation; do not silently move bulk work to a costly model. Do not change providers, global defaults, or infrastructure.

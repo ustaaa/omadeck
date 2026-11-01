@@ -200,8 +200,17 @@ pub(super) fn account(app: &mut SlideApp, ui: &mut Ui) {
             let dark = app.ui.brightness == theme::Brightness::Dark;
             craft_ui::ComboBox::from_id_salt("backstage_appearance")
                 .width(260.0)
-                .selected_text(if dark { "Dark" } else { "Light" })
+                .selected_text(if app.ui.follow_desktop {
+                    "Follow Desktop"
+                } else if dark {
+                    "Dark"
+                } else {
+                    "Light"
+                })
                 .show_ui(ui, |ui| {
+                    if ui.selectable_label(app.ui.follow_desktop, "Follow Desktop").clicked() {
+                        let _ = app.run("view.systemTheme", json!({"on": true}));
+                    }
                     for (on, label) in [(false, "Light"), (true, "Dark")] {
                         if ui.selectable_label(dark == on, label).clicked() {
                             let _ = app.run("view.dark", json!({"on": on}));
@@ -212,7 +221,7 @@ pub(super) fn account(app: &mut SlideApp, ui: &mut Ui) {
                 .widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, "Appearance"));
             ui.add_space(16.0);
             heading(ui, "User Information");
-            dim(ui, "DeckCraft has no accounts: there is nothing to sign in to, and your presentations stay on your device.");
+            dim(ui, "OmaDeck has no accounts: there is nothing to sign in to, and your presentations stay on your device.");
         });
         ui.add_space(40.0);
         ui.vertical(|ui| {
@@ -220,23 +229,17 @@ pub(super) fn account(app: &mut SlideApp, ui: &mut Ui) {
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::hover());
                 crate::dialogs::paint_logo(ui.painter(), r);
-                ui.label(RichText::new("DeckCraft").font(theme::bold(24.0)).color(t.text));
+                ui.label(RichText::new("OmaDeck").font(theme::bold(24.0)).color(t.text));
             });
             dim(ui, &crate::dialogs::version_line());
             dim(ui, "Open source under MIT OR Apache-2.0. Not affiliated with Microsoft.");
             ui.add_space(14.0);
-            if task(
-                ui,
-                Icon::Help,
-                "About DeckCraft",
-                "About DeckCraft",
-                "The version, the people and models who built it, and where to find us.",
-                true,
-            ) {
+            if task(ui, Icon::Help, "About OmaDeck", "About OmaDeck", "The version, the people and models who built it, and where to find us.", true)
+            {
                 let _ = app.run("app.about", json!({}));
             }
-            ui.hyperlink_to("Join our community on Discord", deckcraft_engine::links::DISCORD);
-            ui.hyperlink_to("Source on GitHub", deckcraft_engine::links::GITHUB);
+            ui.hyperlink_to("OmaDeck source", "https://github.com/ustaaa/omadeck");
+            ui.hyperlink_to("Upstream DeckCraft source", deckcraft_engine::links::GITHUB);
         });
     });
 }

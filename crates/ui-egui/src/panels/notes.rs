@@ -93,7 +93,7 @@ fn format(props: &RunProps, size: f32, color: Color32) -> TextFormat {
         Some(pt) if pt.is_finite() && pt > 0.0 => (size * pt as f32 / 12.0).clamp(size * 0.75, size * 2.0),
         _ => size,
     };
-    let font = if props.bold == Some(true) { theme::bold(size) } else { theme::font(size) };
+    let font = if props.bold == Some(true) { theme::document_bold(size) } else { egui::FontId::proportional(size) };
     let mut f = TextFormat::simple(font, color);
     f.italics = props.italic == Some(true);
     if props.underline.as_deref().is_some_and(|u| u != "none") {
@@ -145,7 +145,7 @@ fn job(body: &TextBody, size: f32, color: Color32, wrap: f32) -> LayoutJob {
     job.wrap.max_width = wrap;
     for (i, (p, bullet)) in body.paragraphs.iter().zip(bullets(body)).enumerate() {
         if i > 0 {
-            job.append("\n", 0.0, TextFormat::simple(theme::font(size), color));
+            job.append("\n", 0.0, TextFormat::simple(egui::FontId::proportional(size), color));
         }
         let pl = para_layout(p, bullet.as_deref(), size, color, wrap);
         for s in pl.job.sections {
@@ -197,7 +197,7 @@ pub fn editor(
     let before = draft.body.clone();
     let mut layouter = |ui: &Ui, text: &dyn egui::TextBuffer, wrap: f32| match typed(&before, text.as_str()) {
         Some(b) => galley(ui, &b, size, color, wrap),
-        None => ui.fonts_mut(|f| f.layout_job(LayoutJob::simple(text.as_str().to_string(), theme::font(size), color, wrap))),
+        None => ui.fonts_mut(|f| f.layout_job(LayoutJob::simple(text.as_str().to_string(), egui::FontId::proportional(size), color, wrap))),
     };
     let out = configure(egui::TextEdit::multiline(&mut draft.text)).layouter(&mut layouter).show(ui);
     if draft.body.text() != draft.text {
@@ -219,7 +219,7 @@ fn paint_bullets(painter: &egui::Painter, body: &TextBody, galley: &Galley, orig
         if let Some(b) = bullet {
             let row = galley.pos_from_cursor(CCursor::new(at));
             let pos = origin + vec2(px(indents(p).0, k), row.center().y);
-            let font = theme::font(row.height().clamp(size * 0.75, size * 2.0) * 0.8);
+            let font = egui::FontId::proportional(row.height().clamp(size * 0.75, size * 2.0) * 0.8);
             painter.text(pos, Align2::LEFT_CENTER, b, font, color);
         }
         at += p.char_len() + 1;
@@ -296,10 +296,10 @@ mod tests {
             let b = g.job.text.find(s).unwrap();
             g.job.sections.iter().find(|x| (x.byte_range.start.0..x.byte_range.end.0).contains(&b)).unwrap().format.font_id.clone()
         };
-        assert_eq!(font_of("Metodický"), theme::bold(12.0));
-        assert_eq!(font_of("Cieľ"), theme::bold(12.0));
-        assert_eq!(font_of("vysvetliť"), theme::font(12.0));
-        assert_eq!(font_of("Pomôcky"), theme::font(12.0));
+        assert_eq!(font_of("Metodický"), theme::document_bold(12.0));
+        assert_eq!(font_of("Cieľ"), theme::document_bold(12.0));
+        assert_eq!(font_of("vysvetliť"), egui::FontId::proportional(12.0));
+        assert_eq!(font_of("Pomôcky"), egui::FontId::proportional(12.0));
         // Rows: x where each paragraph's text starts.
         let row_x = |s: &str| {
             let at = body.text().find(s).map(|b| body.text()[..b].chars().count()).unwrap();

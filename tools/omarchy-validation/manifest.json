@@ -1,0 +1,131 @@
+{
+  "app": "deck",
+  "upstream_repository": "https://github.com/storytold/deckcraft",
+  "upstream_tag": "v0.12.0",
+  "upstream_sha": "29f0f7772c47aa2bfb74fcbb0c4d3b1503300849",
+  "cases": [
+    {
+      "name": "native",
+      "extension": "deckcraft"
+    },
+    {
+      "name": "ooxml",
+      "extension": "pptx"
+    }
+  ],
+  "create": [
+    [
+      "shape.insert",
+      {
+        "preset": "roundRect",
+        "rect": [
+          80,
+          160,
+          320,
+          120
+        ],
+        "text": "Oma suite baseline"
+      }
+    ],
+    [
+      "format.font",
+      {
+        "family": "Liberation Sans"
+      }
+    ],
+    [
+      "format.bold",
+      {
+        "on": true
+      }
+    ],
+    [
+      "format.size",
+      {
+        "size": 28
+      }
+    ],
+    [
+      "slide.notes",
+      {
+        "text": "Speaker notes: İstanbul, çalışma."
+      }
+    ],
+    [
+      "slide.new",
+      {
+        "layout": "titleOnly",
+        "title": "Oma table"
+      }
+    ],
+    [
+      "insert.table",
+      {
+        "rows": 2,
+        "cols": 2,
+        "rect": [
+          80,
+          160,
+          400,
+          180
+        ]
+      }
+    ],
+    [
+      "text.edit",
+      {
+        "cell": [
+          0,
+          0
+        ]
+      }
+    ],
+    [
+      "text.insert",
+      {
+        "text": "Cell A"
+      }
+    ],
+    [
+      "text.exit",
+      {}
+    ]
+  ],
+  "edit": [
+    [
+      "slide.go",
+      {
+        "index": 0
+      }
+    ],
+    [
+      "slide.notes",
+      {
+        "text": "Speaker notes: İstanbul, çalışma. Oma edit persisted"
+      }
+    ],
+    [
+      "edit.undo",
+      {}
+    ],
+    [
+      "document.inspect",
+      {}
+    ],
+    [
+      "edit.redo",
+      {}
+    ],
+    [
+      "document.inspect",
+      {}
+    ]
+  ],
+  "expected_text": [
+    "Oma suite baseline",
+    "İstanbul",
+    "Cell A",
+    "Oma edit persisted"
+  ],
+  "undo_marker": "Oma edit persisted"
+}
