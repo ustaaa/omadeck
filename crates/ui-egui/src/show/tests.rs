@@ -1147,11 +1147,18 @@ fn the_presenter_next_preview_arrives_without_blocking_the_frame() {
     let mut show = Show::new(&doc, 0, false, true);
     let mut keep = true;
     let ctx = egui::Context::default();
+    theme::install_fonts(&ctx);
     ctx.run_ui(egui::RawInput::default(), |ui| presenter_window(ui.ctx(), &mut show, &doc, 0.0, &mut keep)).textures_delta.clear();
     assert!(show.next_job.is_some() && show.next_tex.is_none(), "the first frame leaves the preview pending");
     assert_eq!(show.preview_spawns, 1);
     let mut harness = egui_kittest::Harness::builder().with_size(vec2(1100.0, 700.0)).build_ui_state(
         |ui, (doc, show, keep): &mut (std::sync::Arc<Presentation>, Show, bool)| {
+            // Match the host application's font bootstrap before drawing named UI fonts.
+            if !ui.ctx().data_mut(|d| d.get_temp::<bool>(egui::Id::unique("omadeck-presenter-test-fonts")).unwrap_or(false)) {
+                theme::install_fonts(ui.ctx());
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("omadeck-presenter-test-fonts"), true));
+                return;
+            }
             let now = ui.input(|i| i.time);
             presenter_window(ui.ctx(), show, doc, now, keep);
         },
@@ -1181,6 +1188,12 @@ fn paging_quickly_renders_one_preview_at_a_time_and_lands_on_the_newest() {
     let show = Show::new(&doc, 0, false, true);
     let mut harness = egui_kittest::Harness::builder().with_size(vec2(1100.0, 700.0)).build_ui_state(
         |ui, (doc, show, keep): &mut (std::sync::Arc<Presentation>, Show, bool)| {
+            // Match the host application's font bootstrap before drawing named UI fonts.
+            if !ui.ctx().data_mut(|d| d.get_temp::<bool>(egui::Id::unique("omadeck-presenter-test-fonts")).unwrap_or(false)) {
+                theme::install_fonts(ui.ctx());
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("omadeck-presenter-test-fonts"), true));
+                return;
+            }
             let now = ui.input(|i| i.time);
             presenter_window(ui.ctx(), show, doc, now, keep);
         },
@@ -1232,6 +1245,12 @@ fn a_preview_of_an_edited_presentation_is_rendered_again() {
     let show = Show::new(&doc, 0, false, true);
     let mut harness = egui_kittest::Harness::builder().with_size(vec2(1100.0, 700.0)).build_ui_state(
         |ui, (doc, show, keep): &mut (std::sync::Arc<Presentation>, Show, bool)| {
+            // Match the host application's font bootstrap before drawing named UI fonts.
+            if !ui.ctx().data_mut(|d| d.get_temp::<bool>(egui::Id::unique("omadeck-presenter-test-fonts")).unwrap_or(false)) {
+                theme::install_fonts(ui.ctx());
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("omadeck-presenter-test-fonts"), true));
+                return;
+            }
             let now = ui.input(|i| i.time);
             presenter_window(ui.ctx(), show, doc, now, keep);
         },
